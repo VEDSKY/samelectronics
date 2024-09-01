@@ -27,7 +27,7 @@ Project advantages
 - Open your IDE.
 - Download or clone the repository
 ```
-git clone https://github.com/VEDSKY/samelectronics_web.git)https://github.com/VEDSKY/samelectronics_web.git
+git clone https://github.com/VEDSKY/samelectronics_web.git
 ```
 
 ## 2 Update composer dependecies 
