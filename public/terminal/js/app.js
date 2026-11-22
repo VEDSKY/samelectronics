@@ -5,6 +5,7 @@ import { Terminal, sleep } from './core.js';
 import { registerCommands, bootSequence, printMotd } from './commands.js';
 import { installSandbox } from './exploits.js';
 import { installIntegrity } from './integrity.js';
+import { installChaos } from './chaos.js';
 
 const $ = (sel) => document.querySelector(sel);
 const get = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -37,6 +38,7 @@ if (prefs.locale !== 'ru') {
 registerCommands(term);
 installSandbox(term);
 installIntegrity(term);
+installChaos(term);
 term.setupKeyboard($('#keyboard-rows'), $('#keyboard-modes'));
 
 /* ---------- live server handshake (best effort) ---------- */

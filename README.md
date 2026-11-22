@@ -59,6 +59,13 @@ journal · follow · critical           sentinel log, load-bearing files, integr
 sudo · su · flags · reset             escalation, secrets, manual heal
 ```
 
+`glitch` (alias `resync`) claims to re-sync the display, then hands the prompt to
+the shell itself for ~10–22s: it types its own commands into the input line, runs
+them, edits and deletes the project, drops database tables, leaks lines with no
+prompt and spills fragments across the interface. Each run is assembled at random
+(how it starts, what it does, whether it goes as far as wiping the site) so it is
+never quite the same twice; the sentinel and the integrity poll put it back.
+
 **Critical spots.** `/var/www/site/.sentinel/critical.json` (and a `sentinel` row in
 the decoy DB) lists the load-bearing files the shell stands on. Damage or delete one
 and the terminal bleeds **real PHP/Laravel exceptions**: a real `ParseError` produced

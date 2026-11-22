@@ -718,6 +718,45 @@ a { color: inherit; text-decoration: none; }
     to { opacity: 0.92; transform: none; }
 }
 
+/* ============================================================
+   possession — fragments the shell drops over its own UI
+   ============================================================ */
+.spill {
+    position: absolute;
+    z-index: 37;
+    max-width: 60ch;
+    pointer-events: none;
+    white-space: pre;
+    font-family: var(--font-mono);
+    font-size: calc(var(--fs) - 5px);
+    line-height: 1.3;
+    color: var(--fg-dim);
+    opacity: 0.34;
+    text-shadow: 1px 0 rgba(255, 0, 90, 0.45), -1px 0 rgba(0, 255, 255, 0.4);
+    animation: spill-in 0.12s steps(2) both;
+    mix-blend-mode: screen;
+}
+.spill--hot {
+    color: var(--alert);
+    opacity: 0.55;
+    padding: 3px 7px;
+    border: 1px solid color-mix(in srgb, var(--alert) 42%, transparent);
+    background: rgba(0, 0, 0, 0.55);
+}
+.spill--mark {
+    z-index: 36;
+    font-family: var(--font-display);
+    font-size: clamp(30px, 9vw, 140px);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg);
+    opacity: 0.07;
+    text-shadow: none;
+}
+@keyframes spill-in {
+    from { opacity: 0; transform: translateX(-16px) skewX(5deg); }
+}
+
 /* ---------- hints ---------- */
 .hints {
     position: relative;

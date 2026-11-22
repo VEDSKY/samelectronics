@@ -111,7 +111,7 @@ export function registerCommands(term) {
                 'session': ['login', 'logout', 'whoami'],
                 'console': ['admin'],
                 'system': ['neofetch', 'history', 'date', 'uptime', 'ping', 'echo', 'clear', 'theme', 'crt', 'sound', 'font', 'lang', 'keyboard', 'man'],
-                'recon': ['hack', 'nmap', 'sqlmap', 'nc', 'ps', 'top', 'inject', 'exploit', 'journal', 'flags', 'reset'],
+                'recon': ['hack', 'nmap', 'sqlmap', 'nc', 'ps', 'top', 'inject', 'exploit', 'journal', 'critical', 'flags', 'reset'],
                 'misc': ['matrix', 'glitch', 'coffee', 'sudo', 'su', 'rm', 'exit'],
             };
             for (const [group, names] of Object.entries(groups)) {
