@@ -76,16 +76,5 @@ class TerminalSeeder extends Seeder
                 );
             }
         }
-
-        if (DB::getSchemaBuilder()->hasTable('contacts')) {
-            DB::table('contacts')->insertOrIgnore([
-                'name' => 'first visitor',
-                'email' => 'visitor@samelectronics',
-                'message' => 'the terminal boots. nice.',
-                'handled' => false,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
-        }
     }
 }

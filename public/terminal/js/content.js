@@ -30,6 +30,10 @@ export const MOTD = [
     ['out', '  <span class="k">open</span> <span class="v">about</span>    read a section'],
     ['out', '  <span class="k">boot</span>          replay the intro'],
     ['blank', ''],
+    ['label', 'system notice'],
+    ['out', '  this shell is running on a live, exposed copy of the site itself.'],
+    ['out', '  type <span class="k">hack</span> to see what is open — and what happens when you break it.'],
+    ['blank', ''],
     ['faint', 'press TAB to complete · ↑↓ for history · Ctrl+K for the keyboard'],
 ];
 
@@ -67,9 +71,8 @@ export const SECTIONS = [
     { slug: 'releases', title: 'releases', blurb: 'discography' },
     { slug: 'music', title: 'music', blurb: 'albums & tracks' },
     { slug: 'gallery', title: 'gallery', blurb: 'visual debris' },
-    { slug: 'merch', title: 'merch', blurb: 'objects' },
     { slug: 'links', title: 'links', blurb: 'external nodes' },
-    { slug: 'contact', title: 'contact', blurb: 'send a message' },
+    { slug: 'contact', title: 'contact', blurb: 'public channels' },
 ];
 
 export const CONTENT = {
@@ -125,15 +128,6 @@ export const CONTENT = {
             { year: '2019', title: 'simulacra', type: 'album' },
         ],
     },
-    merch: {
-        title: 'merch',
-        note: 'store module is being wired into the shell',
-        items: [
-            { sku: 'SAM-TEE-01', title: 'phosphor tee', price: '€30' },
-            { sku: 'SAM-CST-02', title: 'glitch cassette', price: '€12' },
-            { sku: 'SAM-PRT-03', title: 'a2 poster', price: '€18' },
-        ],
-    },
     links: {
         title: 'links',
         items: [
@@ -183,7 +177,7 @@ export const HELP_TOPICS = {
     open: 'open <section> — render a section (about, news, events, releases, music, gallery, merch, links, contact).',
     ls: 'ls [section] — list sections, or rows inside a section (e.g. `ls releases`).',
     admin: 'admin — content console. requires login. try: admin · admin releases · admin releases 1 · admin rm releases 1.',
-    contact: 'contact — open an interactive form and send a message.',
+    contact: 'contact — the public channels of the project (telegram, bandcamp). no forms, no personal data.',
     login: 'login — authenticate into the console (admin). credentials are your site account.',
     theme: 'theme [phosphor|amber|ice] — switch the phosphor colour.',
     crt: 'crt [on|off] — toggle scanlines, glow and flicker.',

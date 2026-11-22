@@ -42,6 +42,19 @@ return [
             'synchronous' => null,
         ],
 
+        /*
+         | The "hackable" playground database. It is a throwaway sqlite file that
+         | the terminal's exploit surface may query with raw, concatenated SQL on
+         | purpose. It is deliberately isolated from the application database so
+         | a successful injection can never reach real records.
+         */
+        'sandbox' => [
+            'driver' => 'sqlite',
+            'database' => storage_path('app/sandbox.db'),
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+        ],
+
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),

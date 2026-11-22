@@ -64,7 +64,7 @@ async function renderSection(term, slug) {
         term.blank();
         data.channels.forEach((c) => term.write(`<span class="em">${esc(c.label)}</span>  <a class="lnk" href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.value)}</a>`));
         term.blank();
-        term.dim('run `contact` to open the message form');
+        term.dim('no forms here — the shell stores no personal data');
     }
     term.blank();
     term.faint('↵ type `ls` · `open <section>` · `help`');
@@ -72,7 +72,7 @@ async function renderSection(term, slug) {
 }
 
 function resourceNames() {
-    return ['about', 'home', 'news', 'events', 'releases', 'albums', 'tracks', 'photos', 'galleries', 'contacts', 'sorries', 'users'];
+    return ['about', 'home', 'news', 'events', 'releases', 'albums', 'tracks', 'photos', 'galleries', 'sorries'];
 }
 
 /* demo dataset for offline admin */
@@ -85,9 +85,7 @@ const MOCK = {
     tracks: TRACKS,
     photos: PHOTOS,
     galleries: [{ id: 1, title: 'crt study' }],
-    contacts: [{ id: 1, name: 'anonymous', email: 'a@b.c' }],
     sorries: [{ id: 1, title: 'sorry' }],
-    users: [{ id: 1, name: 'admin', email: 'admin@samelectronics' }],
     home: [{ id: 1, title: 'start' }],
 };
 
@@ -109,11 +107,12 @@ export function registerCommands(term) {
             term.rule('help');
             const groups = {
                 'navigate': ['ls', 'open', 'cat', 'search', 'banner', 'boot', 'motd'],
-                'content': ['about', 'news', 'events', 'releases', 'music', 'gallery', 'merch', 'links', 'contact'],
-                'session': ['login', 'logout', 'register', 'whoami'],
+                'content': ['about', 'news', 'events', 'releases', 'music', 'gallery', 'links', 'contact'],
+                'session': ['login', 'logout', 'whoami'],
                 'console': ['admin'],
                 'system': ['neofetch', 'history', 'date', 'uptime', 'ping', 'echo', 'clear', 'theme', 'crt', 'sound', 'font', 'lang', 'keyboard', 'man'],
-                'misc': ['matrix', 'glitch', 'coffee', 'sudo', 'rm', 'exit'],
+                'recon': ['hack', 'nmap', 'sqlmap', 'nc', 'ps', 'top', 'inject', 'exploit', 'journal', 'flags', 'reset'],
+                'misc': ['matrix', 'glitch', 'coffee', 'sudo', 'su', 'rm', 'exit'],
             };
             for (const [group, names] of Object.entries(groups)) {
                 term.label(group);
@@ -260,20 +259,13 @@ export function registerCommands(term) {
         },
     });
 
-    /* section shortcut commands */
-    ['about', 'news', 'events', 'releases', 'merch', 'links'].forEach((slug) => {
+    /* section shortcut commands — read-only, no personal data */
+    ['about', 'news', 'events', 'releases', 'links', 'contact'].forEach((slug) => {
         term.command({
             name: slug,
             about: `open the ${slug} section`,
             run: (term) => renderSection(term, slug),
         });
-    });
-
-    term.command({
-        name: 'contact',
-        aliases: ['message', 'mail'],
-        about: 'send us a message',
-        run: (term) => contactForm(term),
     });
 
     term.command({
@@ -340,7 +332,7 @@ export function registerCommands(term) {
     /* ---------------- session ---------------- */
     term.command({
         name: 'login',
-        aliases: ['su'],
+        aliases: ['signin'],
         about: 'authenticate into the console',
         run: async (term) => {
             const email = await term.ask('login:', { validate: (v) => v.includes('@') || 'enter a valid email' });
@@ -379,29 +371,6 @@ export function registerCommands(term) {
             term.setPrompt();
             term.setStatus('status-user', 'visitor');
             term.ok(t(term).logged_out);
-        },
-    });
-
-    term.command({
-        name: 'register',
-        about: 'create a site account',
-        run: async (term) => {
-            const name = await term.ask('name:');
-            const email = await term.ask('email:', { validate: (v) => v.includes('@') || 'invalid email' });
-            const password = await term.ask('password (min 8):', { mask: true, validate: (v) => v.length >= 8 || 'too short' });
-            term.busyOn('creating account');
-            try {
-                const res = await term.api.post('/register', { name, email, password });
-                term.busyOff();
-                if (!res.ok) return term.err(res.error || 'registration failed');
-                term.session.user = res.user;
-                term.setPrompt();
-                term.sound.ok();
-                term.ok(`welcome, ${res.user.name}`);
-            } catch {
-                term.busyOff();
-                term.warn('server unreachable — registration skipped in offline demo');
-            }
         },
     });
 
@@ -777,29 +746,8 @@ function uptimeLabel() {
     return `${m}m ${s % 60}s`;
 }
 
-async function contactForm(term) {
-    term.blank();
-    term.rule('contact · new message');
-    term.dim('send us a signal · Ctrl+C to abort');
-    const name = await term.ask('name:', { validate: (v) => v.length >= 2 || 'too short' });
-    const email = await term.ask('email:', { validate: (v) => v.includes('@') || 'invalid email' });
-    const message = await term.ask('message:', { validate: (v) => v.length >= 5 || 'say a bit more' });
-    term.busyOn('transmitting');
-    try {
-        const res = await term.api.post('/contact', { name, email, message });
-        term.busyOff();
-        if (!res || !res.ok) return term.err((res && res.error) || 'could not send');
-        term.sound.ok();
-        term.ok(`${t(term).contact_ok} ${res.ticket}`);
-        term.dim(`we will reach you at ${res.received}`);
-    } catch {
-        term.busyOff();
-        term.warn('server unreachable — message not stored (offline preview)');
-    }
-    term.blank();
-}
-
-function printMotd(term) {    MOTD.forEach(([kind, text]) => {
+function printMotd(term) {
+    MOTD.forEach(([kind, text]) => {
         if (text === '') return term.blank();
         term.write(text, `line--${kind}`);
     });

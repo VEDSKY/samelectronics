@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\SandboxController;
 use App\Http\Controllers\TerminalController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,10 +21,30 @@ Route::prefix('api/terminal')->group(function () {
     Route::get('/bootstrap', [TerminalController::class, 'bootstrap']);
     Route::get('/content/{section}', [TerminalController::class, 'content']);
     Route::get('/catalog', [TerminalController::class, 'catalog']);
-    Route::post('/contact', [TerminalController::class, 'contactStore']);
     Route::post('/login', [TerminalController::class, 'login']);
     Route::post('/logout', [TerminalController::class, 'logout']);
-    Route::post('/register', [TerminalController::class, 'register']);
+
+    /*
+     | The hackable surface. Real file I/O and real SQL, but scoped entirely to
+     | the throwaway sandbox; the sentinel resets it on every pulse.
+     */
+    Route::prefix('shell')->middleware('throttle:240,1')->group(function () {
+        Route::get('/ls', [SandboxController::class, 'fsList']);
+        Route::get('/cat', [SandboxController::class, 'fsRead']);
+        Route::post('/write', [SandboxController::class, 'fsWrite']);
+        Route::post('/mkdir', [SandboxController::class, 'fsMkdir']);
+        Route::post('/rm', [SandboxController::class, 'fsRemove']);
+        Route::post('/chmod', [SandboxController::class, 'fsChmod']);
+        Route::post('/reflect', [SandboxController::class, 'reflect']);
+        Route::post('/sql', [SandboxController::class, 'sql']);
+        Route::get('/integrity', [SandboxController::class, 'integrity']);
+    });
+
+    Route::prefix('sentinel')->group(function () {
+        Route::get('/status', [SandboxController::class, 'sentinelStatus']);
+        Route::get('/log', [SandboxController::class, 'sentinelLog']);
+        Route::post('/pulse', [SandboxController::class, 'sentinelPulse']);
+    });
 
     Route::prefix('admin')->group(function () {
         Route::get('/stats', [TerminalController::class, 'adminStats']);

@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Throwable;
@@ -31,21 +29,22 @@ class TerminalController extends Controller
         'tracks' => [\App\Models\Track::class, 'Tracks', 'T'],
         'photos' => [\App\Models\Photo::class, 'Photos', 'P'],
         'galleries' => [\App\Models\Gallery::class, 'Galleries', 'G'],
-        'contacts' => [\App\Models\Contact::class, 'Contact messages', '@'],
         'sorries' => [\App\Models\Sorry::class, 'Sorry pages', 'S'],
-        'users' => [User::class, 'Users', 'U'],
     ];
 
     /** The terminal shell. */
-    public function index(): View
+    public function index(): View|\Illuminate\Http\Response
     {
-        return view('terminal', [
-            'boot' => [
-                'app' => config('app.name', 'samelectronics'),
-                'version' => '2.0.0-phosphor',
-                'locale' => app()->getLocale(),
-            ],
-        ]);
+        return response()
+            ->view('terminal', [
+                'boot' => [
+                    'app' => config('app.name', 'samelectronics'),
+                    'version' => '2.0.0-phosphor',
+                    'locale' => app()->getLocale(),
+                ],
+            ])
+            // never serve a cached page: its CSRF token must match the session
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
     /** Initial handshake: identity, environment, menu map. */
@@ -92,29 +91,8 @@ class TerminalController extends Controller
         ]);
     }
 
-    /** Persist a contact message (best effort — table may be empty/minimal). */
-    public function contactStore(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:160'],
-            'message' => ['required', 'string', 'max:4000'],
-        ]);
-
-        try {
-            \App\Models\Contact::create($data);
-        } catch (Throwable) {
-            // Table columns may not exist yet on a fresh install; keep the
-            // terminal usable and just log the intent.
-            logger()->info('terminal.contact (unpersisted)', $data);
-        }
-
-        return response()->json([
-            'ok' => true,
-            'ticket' => strtoupper(Str::random(8)),
-            'received' => $data['email'],
-        ]);
-    }
+    /** Persist a contact message is no longer supported: the shell keeps no PII. */
+    // (removed on purpose — see README)
 
     /** Terminal login using the standard web guard. */
     public function login(Request $request): JsonResponse
@@ -145,26 +123,8 @@ class TerminalController extends Controller
         return response()->json(['ok' => true]);
     }
 
-    /** Public self-registration. */
-    public function register(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:160', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
-        ]);
-
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-        ]);
-
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return response()->json(['ok' => true, 'user' => $this->userPayload($request)]);
-    }
+    /** Public self-registration was removed — the shell has no user accounts. */
+    // (removed on purpose — see README)
 
     /** Admin: aggregate counters. */
     public function adminStats(Request $request): JsonResponse
@@ -362,9 +322,8 @@ class TerminalController extends Controller
             ['slug' => 'releases', 'title' => 'releases', 'blurb' => 'discography'],
             ['slug' => 'music', 'title' => 'music', 'blurb' => 'albums & tracks'],
             ['slug' => 'gallery', 'title' => 'gallery', 'blurb' => 'visual debris'],
-            ['slug' => 'merch', 'title' => 'merch', 'blurb' => 'objects'],
             ['slug' => 'links', 'title' => 'links', 'blurb' => 'external nodes'],
-            ['slug' => 'contact', 'title' => 'contact', 'blurb' => 'send a message'],
+            ['slug' => 'contact', 'title' => 'contact', 'blurb' => 'public channels'],
         ];
     }
 
@@ -443,15 +402,6 @@ class TerminalController extends Controller
                     ['label' => 'apple music', 'url' => 'https://music.apple.com'],
                     ['label' => 'youtube', 'url' => 'https://youtube.com'],
                     ['label' => 'instagram', 'url' => 'https://instagram.com'],
-                ],
-            ],
-            'merch' => [
-                'title' => 'merch',
-                'note' => 'store module is being wired into the shell',
-                'items' => [
-                    ['sku' => 'SAM-TEE-01', 'title' => 'phosphor tee', 'price' => '€30'],
-                    ['sku' => 'SAM-CST-02', 'title' => 'glitch cassette', 'price' => '€12'],
-                    ['sku' => 'SAM-PRT-03', 'title' => 'a2 poster', 'price' => '€18'],
                 ],
             ],
         ];

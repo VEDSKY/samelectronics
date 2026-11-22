@@ -96,7 +96,7 @@ a { color: inherit; text-decoration: none; }
 .crt {
     position: relative;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
     height: 100dvh;
     padding: clamp(10px, 2vw, 26px);
     background:
@@ -506,6 +506,217 @@ a { color: inherit; text-decoration: none; }
 .key--wide { min-width: 74px; }
 .key--space { flex: 1; max-width: 520px; }
 .key--fn { color: var(--info); }
+
+/* ---------- sentinel strip ---------- */
+.sentinel {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 5px 14px;
+    margin-bottom: 8px;
+    font-size: calc(var(--fs) - 4px);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--fg) 6%, transparent), transparent);
+    white-space: nowrap;
+    overflow: hidden;
+}
+.sentinel__dot { color: var(--ok); text-shadow: var(--glow); }
+.sentinel__name { color: var(--fg); font-weight: 600; letter-spacing: 0.28em; }
+.sentinel__msg {
+    color: var(--fg-dim);
+    text-transform: none;
+    letter-spacing: 0.02em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sentinel__grow { flex: 1; }
+.sentinel__next { color: var(--accent); font-variant-numeric: tabular-nums; }
+.sentinel[data-state="down"] { border-color: var(--alert); }
+.sentinel[data-state="down"] .sentinel__dot { color: var(--alert); animation: blink 0.9s steps(1) infinite; }
+.sentinel.is-pulse { animation: flash-in 0.5s ease-out 1; }
+
+/* ---------- recovery overlay ---------- */
+.recovery {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(60% 40% at 50% 50%, color-mix(in srgb, var(--fg) 10%, transparent), rgba(0, 0, 0, 0.6));
+    transition: opacity 0.12s linear;
+}
+.recovery.is-on { opacity: 1; }
+.recovery__inner { text-align: center; }
+.recovery__title {
+    font-family: var(--font-display);
+    font-size: calc(var(--fs) + 20px);
+    letter-spacing: 4px;
+    color: var(--fg);
+    text-shadow: var(--glow), 0 0 26px var(--glow-soft);
+    animation: glitch-in 0.4s steps(3) 1;
+}
+.recovery__sub {
+    font-size: calc(var(--fs) - 3px);
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-dim);
+}
+
+/* healing flicker on the whole tube */
+.crt.is-healing { animation: heal 0.9s steps(4) 1; }
+@keyframes heal {
+    0%, 100% { filter: none; }
+    20% { filter: brightness(1.45) contrast(1.1); }
+    40% { filter: invert(0.06) hue-rotate(8deg); }
+    60% { filter: brightness(0.9); }
+}
+
+/* deliberate XSS sink renders here, isolated from the shell */
+.xss-frame {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    height: 96px;
+    margin: 4px 0 2px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: #040705;
+    color: var(--fg);
+}
+
+/* ============================================================
+   integrity glitch — damage to the project's critical spots
+   Escalates in tiers; readable until the manifest dies.
+   ============================================================ */
+.crt[data-glitch="1"] { --glitch-op: 0.16; animation: glitch-hum 2.2s steps(2) infinite; }
+.crt[data-glitch="2"] { --glitch-op: 0.28; animation: glitch-hum 1.2s steps(2) infinite; }
+.crt[data-glitch="3"] { --glitch-op: 0.44; animation: glitch-hum 0.6s steps(2) infinite; }
+
+.crt[data-glitch]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 11;
+    pointer-events: none;
+    opacity: var(--glitch-op, 0.2);
+    mix-blend-mode: screen;
+    background:
+        repeating-linear-gradient(to bottom, transparent 0 3px, rgba(255, 0, 90, 0.16) 3px 4px),
+        repeating-linear-gradient(to right, transparent 0 220px, rgba(0, 255, 255, 0.10) 220px 224px, transparent 224px 480px);
+    animation: glitch-tear 0.85s steps(3) infinite;
+}
+
+.crt[data-glitch="2"] .line,
+.crt[data-glitch="2"] .cmdline__text,
+.crt[data-glitch="2"] .statusbar {
+    text-shadow: 1px 0 rgba(255, 0, 90, 0.42), -1px 0 rgba(0, 255, 255, 0.38);
+}
+.crt[data-glitch="3"] .line,
+.crt[data-glitch="3"] .cmdline__text,
+.crt[data-glitch="3"] .statusbar {
+    text-shadow: 2px 0 rgba(255, 0, 90, 0.55), -2px 0 rgba(0, 255, 255, 0.5), 0 0 10px currentColor;
+    animation: glitch-jitter 0.42s steps(2) infinite;
+}
+
+@keyframes glitch-hum {
+    0%, 100% { filter: none; }
+    44% { filter: contrast(1.06) saturate(1.16); }
+    46% { filter: hue-rotate(-9deg) contrast(1.16) brightness(1.05); }
+    48% { filter: none; }
+}
+@keyframes glitch-tear {
+    0% { transform: translateX(0); }
+    33% { transform: translateX(-6px); }
+    36% { transform: translateX(4px); }
+    66% { transform: translateX(2px); }
+    100% { transform: translateX(0); }
+}
+@keyframes glitch-jitter {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(-1px, 1px); }
+}
+
+/* ============================================================
+   databending — the manifest or the whole project is gone
+   The page stops behaving like a page. No filter can save it.
+   ============================================================ */
+.crt.is-databending {
+    will-change: transform, filter;
+    overflow: visible;
+}
+.crt.is-databending .crt__scanlines { opacity: 0.9; animation: db-scan 0.19s steps(2) infinite; }
+.crt.is-databending .crt__flicker { animation: db-flicker 0.11s steps(1) infinite; }
+.crt.is-databending::before { opacity: 0.65; animation: glitch-tear 0.16s steps(2) infinite; }
+
+@keyframes db-scan {
+    0% { background-position: 0 0; }
+    50% { background-position: 0 7px; }
+    100% { background-position: 0 2px; }
+}
+@keyframes db-flicker {
+    0% { opacity: 0.15; }
+    40% { opacity: 0.6; transform: translateY(-2px); }
+    42% { opacity: 0.9; }
+    100% { opacity: 0.35; }
+}
+
+.databend-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    opacity: 0.9;
+}
+
+.chaos-flash {
+    position: absolute;
+    inset: 0;
+    z-index: 41;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--fg) 55%, transparent);
+    mix-blend-mode: overlay;
+    animation: chaos-strobe 0.14s steps(1) 1;
+}
+@keyframes chaos-strobe {
+    0% { opacity: 0.55; }
+    60% { opacity: 0.12; background: var(--alert); }
+    100% { opacity: 0; }
+}
+
+.phantom-error {
+    position: absolute;
+    z-index: 38;
+    max-width: 46ch;
+    padding: 6px 9px;
+    pointer-events: none;
+    white-space: pre-wrap;
+    font-size: calc(var(--fs) - 4px);
+    line-height: 1.35;
+    color: var(--alert);
+    border: 1px solid color-mix(in srgb, var(--alert) 45%, transparent);
+    background: rgba(0, 0, 0, 0.62);
+    box-shadow: 0 0 18px rgba(255, 60, 60, 0.18);
+    text-shadow: 1px 0 rgba(0, 255, 255, 0.4);
+    animation: phantom-in 0.1s steps(2) both;
+    mix-blend-mode: screen;
+}
+.phantom-error b { color: #fff; font-weight: 600; }
+.phantom-error .dim { color: var(--fg-dim); }
+@keyframes phantom-in {
+    from { opacity: 0; transform: translateX(-14px) skewX(4deg); }
+    to { opacity: 0.92; transform: none; }
+}
 
 /* ---------- hints ---------- */
 .hints {

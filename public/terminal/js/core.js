@@ -77,6 +77,20 @@ export class Api {
             body: body === undefined ? undefined : JSON.stringify(body),
         });
         this.online = true;
+
+        // 419 = the CSRF token no longer matches its session (the session was
+        // cleared or expired while the shell stayed open). Refreshing the token
+        // over the wire can race with a login that is rotating the session, so
+        // reboot the shell instead: a reload is atomic and keeps the cookie.
+        if (res.status === 419) {
+            const last = Number(sessionStorage.getItem('sam:csheal') || 0);
+            if (Date.now() - last > 15000) {
+                sessionStorage.setItem('sam:csheal', String(Date.now()));
+                location.reload();
+            }
+            return { ok: false, error: 'session expired — reloading shell' };
+        }
+
         let data = null;
         try { data = await res.json(); } catch { /* non-json */ }
         if (!res.ok && data === null) throw new Error(`http ${res.status}`);
@@ -347,6 +361,8 @@ export class Terminal {
             ctx.reject(new Error('aborted'));
             return;
         }
+        // let an extension (e.g. the sentinel's log follower) intercept Ctrl+C
+        if (this.onInterrupt && this.onInterrupt()) return;
         if (this.busy) { this.warn('aborted'); return; }
         if (this.value) { this.echoLine(this.value, '^C'); this.clearLine(); }
         else if (fromCtrlC) this.dim('^C');
@@ -357,6 +373,7 @@ export class Terminal {
         const { mask = false, defaultValue = '', validate = null, cls = 'line--warn' } = opts;
         return new Promise((resolve, reject) => {
             this.mode = 'ask';
+            this.clearLine();
             const line = this.write(`<span class="k">${esc(prompt)}</span> `, cls);
             this._askCtx = { prompt, mask, defaultValue, validate, resolve, reject, cls, line };
             this.focus();

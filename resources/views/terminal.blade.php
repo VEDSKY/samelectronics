@@ -33,6 +33,14 @@
             <span class="statusbar__seg" id="status-clock">--:--:--</span>
         </header>
 
+        <div class="sentinel" id="sentinel" data-state="ok" aria-live="polite">
+            <span class="sentinel__dot" aria-hidden="true">◉</span>
+            <span class="sentinel__name">SENTINEL</span>
+            <span class="sentinel__msg" id="sentinel-msg">linking to watchdog…</span>
+            <span class="sentinel__grow"></span>
+            <span class="sentinel__next" id="sentinel-next">⟲ 08s</span>
+        </div>
+
         <main class="screen" id="screen" role="log" aria-live="polite" aria-label="terminal output">
             <div class="screen__inner" id="lines"></div>
         </main>
@@ -85,6 +93,13 @@
                 <p><a href="https://t.me/weltfuturisten">telegram</a> · <a href="https://samelectronics.bandcamp.com">bandcamp</a></p>
             </div>
         </noscript>
+
+        <div class="recovery" id="recovery" aria-hidden="true">
+            <div class="recovery__inner">
+                <div class="recovery__title">⟲ RESTORING</div>
+                <div class="recovery__sub">sentinel · rebuilding from pristine snapshot</div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="{{ asset('terminal/js/app.js') }}"></script>

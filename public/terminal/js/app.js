@@ -3,6 +3,8 @@
    ============================================================ */
 import { Terminal, sleep } from './core.js';
 import { registerCommands, bootSequence, printMotd } from './commands.js';
+import { installSandbox } from './exploits.js';
+import { installIntegrity } from './integrity.js';
 
 const $ = (sel) => document.querySelector(sel);
 const get = (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
@@ -33,6 +35,8 @@ if (prefs.locale !== 'ru') {
 }
 
 registerCommands(term);
+installSandbox(term);
+installIntegrity(term);
 term.setupKeyboard($('#keyboard-rows'), $('#keyboard-modes'));
 
 /* ---------- live server handshake (best effort) ---------- */
@@ -56,10 +60,11 @@ async function handshake() {
 
 /* ---------- rotating hint ---------- */
 const HINTS = [
+    'try <b>hack</b>',
     'try <b>open about</b>',
-    'try <b>ls</b>',
+    'try <b>ls /var/www/site</b>',
     'try <b>music</b>',
-    'try <b>contact</b>',
+    'try <b>critical</b>',
     'try <b>login</b> → <b>admin</b>',
     'try <b>theme amber</b>',
     'try <b>neofetch</b>',
