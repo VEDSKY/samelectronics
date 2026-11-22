@@ -62,7 +62,6 @@ async function handshake() {
 
 /* ---------- rotating hint ---------- */
 const HINTS = [
-    'try <b>hack</b>',
     'try <b>open about</b>',
     'try <b>ls /var/www/site</b>',
     'try <b>music</b>',

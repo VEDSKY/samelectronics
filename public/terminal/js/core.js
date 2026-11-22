@@ -149,8 +149,14 @@ export class Terminal {
         const target = this.aliases.get(name);
         return target ? this.commands.get(target) : null;
     }
-    commandNames() { return [...this.commands.keys()].sort(); }
-    completions() { return [...this.commands.keys(), ...this.aliases.keys()].sort(); }
+    commandNames() { return [...this.commands.keys()].filter((n) => !this.commands.get(n)?.hidden).sort(); }
+    completions() {
+        const visible = (n) => {
+            const cmd = this.resolve(n);
+            return !cmd || !cmd.hidden;
+        };
+        return [...this.commands.keys(), ...this.aliases.keys()].filter(visible).sort();
+    }
 
     /* ---------- rendering ---------- */
     write(html = '', cls = 'line--out') {

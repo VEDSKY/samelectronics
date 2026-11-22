@@ -44,7 +44,11 @@ history · date · uptime · ping · echo · clear            matrix · glitch �
 This is a performance piece: the site invites you to break it, and it means it. The
 shell opens the **real project** at `/var/www/site` — controllers, routes, config,
 `vendor/`, `composer.json` — plus a decoy server around it and a small database.
-Run `hack` for the story; the essentials:
+`hack` is deliberately unlisted: it is not in `help`, TAB completion or the boot hint,
+so most visitors meet the toolkit only when a `glitch` collapse types it for them.
+`corrupt` is the same — hidden, ghost-only — and is the heavy hammer: one call tears
+several directories and files out of the project at once and the shell bleeds the
+real exceptions.
 
 ```
 hack                                 start here — objectives + how it heals
@@ -60,16 +64,20 @@ sudo · su · flags · reset             escalation, secrets, manual heal
 ```
 
 `glitch` (alias `resync`) claims to re-sync the display, then hands the prompt to
-the shell itself for ~11–20s. It does not slam on — the show builds in four beats:
+the shell itself for ~13–30s. It does not slam on — the show builds in four beats:
 a quiet drift (the tube shifts a pixel, one glyph flickers), interference (a line
-with no prompt, a fragment over the UI, a command half-typed and taken back), a
-takeover (it begins typing its own commands, mostly harmless), and finally the
-collapse, where a load-bearing file is edited or deleted. It drops database tables,
-leaks lines with no prompt and spills fragments across the interface. Each run is
-assembled at random — intro steps, duration, bias, whether it goes as far as wiping
-the site — so it is never quite the same twice. The sentinel stands down while the
-display is occupied, so the damage it causes is still there to be read; the next
-pulse puts it back.
+with no prompt, a fragment over the UI, a command half-typed and taken back — and,
+often, the ghost finding the hidden `hack` toolkit first), a takeover (it begins
+typing its own commands, already damaging the project), and finally the collapse,
+which opens with the hidden `corrupt` — one command that tears several directories and
+files out of the project at once — followed by one or two more wounds, each a critical
+spot or a whole directory the shell stands on. It drops database
+tables, leaks lines with no prompt and spills hotter, longer-lived fragments across
+the interface, tearing harder as each phase rolls over. Each run is assembled at
+random — intro steps, duration, bias, how many wounds it opens, whether it goes as
+far as wiping the site — so it is never quite the same twice. The sentinel stands
+down while the display is occupied, so the damage it causes is still there to be
+read; the next pulse puts it back.
 
 **Critical spots.** `/var/www/site/.sentinel/critical.json` (and a `sentinel` row in
 the decoy DB) lists the load-bearing files the shell stands on. Damage or delete one
@@ -78,12 +86,12 @@ by `php -l` for a corrupted file, a class-not-found `Error` for a deleted contro
 a `QueryException` for a dropped record — each with a real file, line and trace.
 The error is printed first and stays readable (`critical` reads it back from the
 server); only then does the glitch begin — one tier at a time over several seconds,
-while printed text slowly decays and the tube loses focus. Destroy the manifest or
-the whole project (`rm -rf /`) and the page itself comes apart: **databending** —
-canvas feedback, torn scanlines, scrambled text, layout jitter, phantom stack
-traces — which also fades in over several seconds rather than snapping on, until the
-next sentinel pulse. The client polls `/api/terminal/shell/integrity` every 3.5s to
-escalate and unwind the tiers.
+while printed text decays faster and further and the tube loses focus. Destroy the
+manifest or the whole project (`rm -rf /`) and the page itself comes apart:
+**databending** — canvas feedback, torn scanlines, scrambled text, layout jitter,
+phantom stack traces, input that loses what you typed — which also fades in over
+several seconds rather than snapping on, until the next sentinel pulse. The client
+polls `/api/terminal/shell/integrity` every 3.5s to escalate and unwind the tiers.
 
 **Safety boundary.** Reads are real; writes are not. Every edit, delete, mkdir or
 chmod under `/var/www/site` lands in a write-overlay (`storage/app/sandbox.overlay`)

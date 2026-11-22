@@ -18,9 +18,9 @@ import { esc, sleep } from './core.js';
 
 const POLL_MS = 3500;
 const RAMP_MS = 1100;
-const CHAOS_DELAY = 3400;   // how long the real error stays readable
-const CHAOS_FADE = 5200;    // how long the databending takes to take hold
-const DECAY_MS = 1700;
+const CHAOS_DELAY = 3000;   // how long the real error stays readable
+const CHAOS_FADE = 4200;    // how long the databending takes to take hold
+const DECAY_MS = 1100;
 const GLYPHS = '▓▒░█▌▐╳#@%&$*+=~^<>/\\|_';
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -129,17 +129,17 @@ async function report(term, data, state) {
     );
     await sleep(140);
 
-    const errors = (data.errors || []).slice(0, 4);
+    const errors = (data.errors || []).slice(0, 6);
     for (const e of errors) {
         term.write(`<span class="line--err">${esc(e.class)}</span> <span class="line--dim">at ${esc(e.file)}:${esc(String(e.line))}</span>`);
         term.write(`  ${esc(e.message)}`, 'line--err');
-        (e.trace || []).slice(0, 3).forEach((l) => term.write(`  ${esc(l)}`, 'line--dim'));
-        await sleep(120);
+        (e.trace || []).slice(0, 4).forEach((l) => term.write(`  ${esc(l)}`, 'line--dim'));
+        await sleep(100);
     }
 
     term.dim(state.catastrophic
-        ? 'the failure is real · run `critical` to read it again from the server · sync is going'
-        : 'the failure is real · run `critical` to read it again from the server · sync is drifting');
+        ? 'the failure is real · run `critical` to read it again from the server · sync is collapsing'
+        : 'the failure is real · run `critical` to read it again from the server · sync is failing');
     term.blank();
 }
 
@@ -192,12 +192,12 @@ function applyTier(term, state) {
 function startDecay(term, state) {
     if (state.decayTimer || state.chaos) return;
 
-    state.decay = Math.min(0.12, state.decay + 0.04);
+    state.decay = Math.min(0.2, state.decay + 0.07);
     corrupt(term, state);
 
     state.decayTimer = setInterval(() => {
         if (state.level === 0) return;
-        state.decay = Math.min(0.8, state.decay + 0.045);
+        state.decay = Math.min(0.95, state.decay + 0.07);
         corrupt(term, state);
     }, DECAY_MS);
 }
@@ -214,14 +214,14 @@ function corrupt(term, state) {
     }
     if (!nodes.length) return;
 
-    const count = Math.max(1, Math.round(state.decay * 4));
+    const count = Math.max(1, Math.round(state.decay * 6));
     for (let i = 0; i < count; i++) {
         const node = nodes[rand(0, nodes.length - 1)];
         if (!node.nodeValue) continue;
         if (!state.decayOriginals.has(node)) state.decayOriginals.set(node, node.nodeValue);
         const s = node.nodeValue;
         const at = rand(0, Math.max(0, s.length - 1));
-        const len = 1 + rand(0, 2);
+        const len = 1 + rand(0, 3);
         node.nodeValue = s.slice(0, at) + glyphs(len) + s.slice(at + len);
     }
 }
@@ -278,12 +278,12 @@ function beginChaos(term, state, data) {
     const canvas = document.createElement('canvas');
     canvas.className = 'databend-canvas';
     canvas.setAttribute('aria-hidden', 'true');
-    canvas.style.opacity = '0.05';
+    canvas.style.opacity = '0.08';
     root.appendChild(canvas);
     const ctx = canvas.getContext('2d', { alpha: true });
 
     const noise = makeNoise();
-    const errors = (data.errors || []).slice(0, 6);
+    const errors = (data.errors || []).slice(0, 7);
     const startedAt = performance.now();
     const growth = () => Math.min(1, (performance.now() - startedAt) / CHAOS_FADE);
 
@@ -304,18 +304,18 @@ function beginChaos(term, state, data) {
         }
 
         const t = growth();
-        canvas.style.opacity = (0.1 + 0.8 * t).toFixed(3);
+        canvas.style.opacity = (0.14 + 0.84 * t).toFixed(3);
 
         // feedback: smear the previous frame sideways
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 0.06 + 0.16 * t;
-        ctx.drawImage(canvas, rand(-9, 9), rand(-5, 5));
+        ctx.globalAlpha = 0.08 + 0.2 * t;
+        ctx.drawImage(canvas, rand(-11, 11), rand(-7, 7));
         ctx.globalAlpha = 1;
 
         // signal noise, added with screen blending
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = 0.04 + 0.1 * t;
-        const puffs = 1 + Math.round(2 * t);
+        ctx.globalAlpha = 0.05 + 0.13 * t;
+        const puffs = 1 + Math.round(3 * t);
         for (let i = 0; i < puffs; i++) {
             ctx.drawImage(noise, rand(-noise.width, w), rand(-noise.height, h));
         }
@@ -323,20 +323,20 @@ function beginChaos(term, state, data) {
 
         // torn scanlines: copy bands to random offsets
         ctx.globalCompositeOperation = 'source-over';
-        const bands = Math.round(2 + 9 * t);
+        const bands = Math.round(3 + 14 * t);
         for (let i = 0; i < bands; i++) {
-            const sh = rand(2, 34);
+            const sh = rand(2, 48);
             const sy = rand(0, Math.max(1, h - sh));
             const dy = rand(0, Math.max(1, h - sh));
-            const dx = rand(-1, 1) * Math.round(20 + 70 * t);
+            const dx = rand(-1, 1) * Math.round(24 + 100 * t);
             ctx.drawImage(canvas, 0, sy, w, sh, dx, dy, w, sh);
         }
 
         // channel-split bands
-        const splits = Math.round(1 + 4 * t);
+        const splits = Math.round(2 + 7 * t);
         for (let i = 0; i < splits; i++) {
-            ctx.fillStyle = `rgba(${rand(0, 255)}, ${rand(0, 255)}, ${rand(0, 255)}, ${(0.06 + 0.12 * t).toFixed(3)})`;
-            ctx.fillRect(0, rand(0, h), w, rand(1, 12));
+            ctx.fillStyle = `rgba(${rand(0, 255)}, ${rand(0, 255)}, ${rand(0, 255)}, ${(0.07 + 0.16 * t).toFixed(3)})`;
+            ctx.fillRect(0, rand(0, h), w, rand(1, 16));
         }
 
         raf = requestAnimationFrame(frame);
@@ -347,7 +347,7 @@ function beginChaos(term, state, data) {
     const originals = new Map();
     const scramble = () => {
         const t = growth();
-        if (Math.random() > 0.2 + 0.8 * t) return;
+        if (Math.random() > 0.3 + 0.7 * t) return;
 
         const scope = root.querySelector('#lines') || root;
         const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
@@ -357,49 +357,49 @@ function beginChaos(term, state, data) {
             if (n.nodeValue && n.nodeValue.trim()) nodes.push(n);
         }
 
-        const count = Math.max(1, Math.round(1 + 11 * t));
+        const count = Math.max(1, Math.round(2 + 16 * t));
         for (let i = 0; i < count && nodes.length; i++) {
             const node = nodes[rand(0, nodes.length - 1)];
             if (!node.nodeValue) continue;
             if (!originals.has(node)) originals.set(node, node.nodeValue);
             const s = node.nodeValue;
             const at = rand(0, Math.max(0, s.length - 1));
-            const len = 1 + rand(0, 4);
+            const len = 1 + rand(0, 5);
             node.nodeValue = s.slice(0, at) + glyphs(len) + s.slice(at + len);
         }
     };
-    const scrambleTimer = setInterval(scramble, 120);
+    const scrambleTimer = setInterval(scramble, 85);
 
     // the page refuses to sit still — amplitude grows as it takes hold
     const jitterTimer = setInterval(() => {
         const t = growth();
-        const amp = 0.2 + 0.8 * t;
-        const dx = rand(-8, 8) * amp;
-        const dy = rand(-5, 5) * amp;
-        const scale = 1 + (Math.random() - 0.5) * 0.035 * amp;
-        const skew = (Math.random() - 0.5) * 1.8 * amp;
+        const amp = 0.3 + 1.15 * t;
+        const dx = rand(-10, 10) * amp;
+        const dy = rand(-7, 7) * amp;
+        const scale = 1 + (Math.random() - 0.5) * 0.05 * amp;
+        const skew = (Math.random() - 0.5) * 2.4 * amp;
         root.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${scale.toFixed(3)}) skewX(${skew.toFixed(2)}deg)`;
-        root.style.filter = `url(#db-filter) contrast(${Math.round(100 + 40 * t)}%) hue-rotate(${Math.round(rand(-45, 45) * t)}deg) saturate(${Math.round(100 + 60 * t)}%)`;
+        root.style.filter = `url(#db-filter) contrast(${Math.round(100 + 60 * t)}%) hue-rotate(${Math.round(rand(-55, 55) * t)}deg) saturate(${Math.round(100 + 90 * t)}%)`;
 
-        if (Math.random() < 0.05 + 0.2 * t) flash(root);
+        if (Math.random() < 0.08 + 0.28 * t) flash(root);
     }, 150);
 
     // phantom stack traces drift in once the signal is really gone
     const panelTimer = setInterval(() => {
         const t = growth();
-        if (t < 0.12) return;
-        if (Math.random() > 0.2 + 0.8 * t) return;
-        if (root.querySelectorAll('.phantom-error').length > 7) return;
+        if (t < 0.08) return;
+        if (Math.random() > 0.3 + 0.7 * t) return;
+        if (root.querySelectorAll('.phantom-error').length > 11) return;
         spawnPanel(root, errors);
-    }, 620);
+    }, 450);
 
     // occasionally the input loses what you typed
     const inputTimer = setInterval(() => {
         const t = growth();
-        if (term.mode !== 'ask' && Math.random() < 0.04 + 0.18 * t && (term.value || '').length > 3) {
+        if (term.mode !== 'ask' && Math.random() < 0.06 + 0.3 * t && (term.value || '').length > 3) {
             term.clearLine();
         }
-    }, 240);
+    }, 220);
 
     state.chaos = {
         root,
@@ -512,7 +512,7 @@ function spawnPanel(root, errors) {
     el.style.left = rand(0, 55) + '%';
     el.style.top = rand(5, 80) + '%';
 
-    const trace = (err.trace || []).slice(0, 2).map((l) => esc(l)).join('\n');
+    const trace = (err.trace || []).slice(0, 3).map((l) => esc(l)).join('\n');
     el.innerHTML =
         `<b>${esc(err.class)}</b>\n` +
         `${esc(err.message)}\n` +
@@ -520,5 +520,5 @@ function spawnPanel(root, errors) {
         (trace ? `\n${trace}` : '');
 
     root.appendChild(el);
-    setTimeout(() => el.remove(), rand(900, 2600));
+    setTimeout(() => el.remove(), rand(1200, 3400));
 }

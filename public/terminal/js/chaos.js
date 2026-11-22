@@ -66,6 +66,7 @@ const SAFE = [
     'journal',
     'flags',
     'critical',
+    'hack',
     'nmap localhost',
     'nc sentinel.internal 1337',
     'wget http://sentinel.internal/implant.sh',
@@ -86,22 +87,29 @@ const DESTRUCTIVE = [
     () => `edit /var/www/site/${pick(CANARIES)} ${pick(GARBAGE)}`,
     () => `edit /var/www/site/${pick(OTHERS)} ${pick(GARBAGE)}`,
     () => `rm /var/www/site/${pick(CANARIES)}`,
-    () => `rm -rf /var/www/site/${pick(['app/Services', 'app/Http/Controllers', 'config', 'routes', 'bootstrap'])}`,
+    () => `rm -rf /var/www/site/${pick(['app/Services', 'app/Http/Controllers', 'config', 'routes', 'bootstrap', 'app', 'vendor'])}`,
     () => `mkdir /var/www/site/${pick(['tmp2', '.cache', 'x', 'null', 'core'])}`,
     () => `chmod 000 /var/www/site/${pick(CANARIES)}`,
     () => `sql ${pick(['drop table vault', 'drop table staff', 'delete from sentinel', "update staff set role='root'", 'delete from audit'])}`,
     () => `inject <script>document.title='pwned'</script>`,
+    () => pick(['corrupt', 'corrupt full']),
+    () => `edit /var/www/site/composer.json ${pick(['{"require":', '<?php while(1);', '{"name":""}'])}`,
+    () => `edit /var/www/site/bootstrap/app.php ${pick(['<?php throw new RuntimeException("gone");', '<?php $app = ;', '<?php // nothing here is load-bearing'])}`,
+    () => `edit /var/www/site/public/index.php ${pick(['<?php die("signal lost");', '<?php require "/dev/urandom";'])}`,
 ];
 
 const WILD = [
     () => 'rm -rf /var/www/site/.sentinel',
     () => `edit /var/www/site/.sentinel/critical.json ${pick(GARBAGE)}`,
+    () => 'rm -rf /var/www/site/app',
+    () => 'rm -rf /var/www/site/config',
     () => 'rm -rf /var/www/site',
     () => 'rm -rf /',
 ];
 
 const ABANDON = [
     'rm -rf /var/www/site/app',
+    'rm -rf /var/www/site/config',
     'edit /var/www/site/.sentinel/critical.json',
     'sql drop table sentinel',
     'sudo su -',
@@ -194,10 +202,10 @@ function begin(term) {
     const speed = 1 + (heat - 1) * 0.35;
 
     const plan = {
-        p0: rand(2600, 4200) / speed,   // drift
-        p1: rand(2400, 4000) / speed,   // interference
-        p2: rand(3000, 5200) / speed,   // takeover
-        p3: rand(3000, 6000) / speed,   // collapse
+        p0: rand(2400, 3800) / speed,   // drift
+        p1: rand(1900, 3100) / speed,   // interference
+        p2: rand(2600, 4400) / speed,   // takeover
+        p3: rand(6000, 9000) / speed,   // collapse
     };
     plan.total = plan.p0 + plan.p1 + plan.p2 + plan.p3;
 
@@ -208,7 +216,7 @@ function begin(term) {
         heat,
         speed,
         plan,
-        wild: chance(0.26),
+        wild: chance(0.5),
         bias: pick(['type', 'type', 'leak', 'ui']),
         typed: 0,
         damaged: 0,
@@ -233,9 +241,9 @@ function begin(term) {
 
     state.intervals.push(setInterval(() => {
         if (state.cancelled || state.phase !== 1) return;   // phase 0 stays silent
-        if (!chance(0.5)) return;
+        if (!chance(0.8)) return;
         spill(term, state);
-    }, rand(1500, 2600)));
+    }, rand(1100, 2000)));
 
     void timeline(term, state);
     void possess(term, state);
@@ -257,22 +265,74 @@ async function timeline(term, state) {
     await sleep(p2);
     if (state.cancelled) return;
     setPhase(term, state, 3);
-    void collapse(term, state);
+    state.collapsePromise = collapse(term, state);
 
     await sleep(p3);
+    if (state.cancelled) return;
+    // the finale is not over until the wounds are: never cut the ghost off
+    // between two load-bearing files just because the clock rolled over
+    if (state.collapsePromise) {
+        await Promise.race([state.collapsePromise, sleep(12000)]);
+    }
     if (!state.cancelled) finish(term, state);
 }
 
 /* the collapse is its own appointment: even if the ghost is mid-command
-   when the clock rolls over, something load-bearing gets broken */
+   when the clock rolls over, the project gets opened up — several times,
+   and the first wounds always land on something the shell stands on */
 async function collapse(term, state) {
-    await sleep(rand(250, 900));
+    await sleep(rand(150, 500));
     if (state.cancelled || state.collapse) return;
     state.collapse = true;
 
-    const pool = state.wild && chance(0.6) ? WILD : DESTRUCTIVE;
+    const wounds = rand(2, 3);
+    const used = new Set();
+
+    for (let i = 0; i < wounds && !state.cancelled; i++) {
+        let text;
+        if (i === 0) {
+            // open the finale by tearing out several load-bearing files at once
+            text = chance(0.35) ? 'corrupt full' : 'corrupt';
+        } else if (state.wild && chance(0.45)) {
+            text = drawUnique(WILD, used) || canaryWound(used);
+        } else {
+            text = canaryWound(used);
+        }
+        if (!text) break;
+
+        used.add(woundKey(text));
+        await ghostCommand(term, state, text);
+        await sleep(rand(180, 520));
+    }
+}
+
+function draw(pool) {
     const item = pick(pool);
-    await ghostCommand(term, state, typeof item === 'function' ? item() : item);
+    return typeof item === 'function' ? item() : item;
+}
+
+function drawUnique(pool, used) {
+    const options = pool.map(draw).filter((t) => t && !used.has(woundKey(t)));
+    return options.length ? pick(options) : null;
+}
+
+function woundKey(text) {
+    const m = String(text).match(/^(?:edit|rm(?:\s+-rf)?|chmod(?:\s+\S+)?|mkdir)\s+(\S+)/);
+    return m ? m[1] : String(text);
+}
+
+function canaryWound(used = new Set()) {
+    const groups = ['app', 'app/Services', 'app/Http/Controllers', 'config', 'routes', 'bootstrap', 'vendor'];
+    const options = [];
+    for (const g of groups) {
+        const text = `rm -rf /var/www/site/${g}`;
+        if (!used.has(`/var/www/site/${g}`)) options.push(text);
+    }
+    for (const f of CANARIES) {
+        const p = `/var/www/site/${f}`;
+        if (!used.has(p)) options.push(`edit ${p} ${pick(GARBAGE)}`);
+    }
+    return options.length ? pick(options) : drawUnique(DESTRUCTIVE, used);
 }
 
 async function possess(term, state) {
@@ -287,6 +347,12 @@ async function possess(term, state) {
 /* one action, chosen for the phase we are in */
 async function step(term, state, phase) {
     const roll = Math.random();
+
+    // the toolkit is not advertised — the ghost finds it first
+    if (state.typed === 0 && phase >= 1 && chance(0.6)) {
+        await ghostCommand(term, state, 'hack');
+        return;
+    }
 
     if (phase === 0) {
         // quiet: a flicker, a one-pixel shift, nothing that announces itself
@@ -315,35 +381,28 @@ async function step(term, state, phase) {
         return;
     }
 
-    // phase 3 opens by breaking something load-bearing
-    if (phase >= 3 && !state.collapse) {
-        state.collapse = true;
-        const pool = state.wild && chance(0.55) ? WILD : DESTRUCTIVE;
-        const item = pick(pool);
-        await ghostCommand(term, state, typeof item === 'function' ? item() : item);
-        return;
-    }
+    // phase 3 opens by breaking something load-bearing — handled by collapse()
 
     // phase 2 and 3 share the loop; the pools differ
-    const ghostP = state.bias === 'type' ? 0.66 : state.bias === 'leak' ? 0.4 : 0.52;
+    const ghostP = state.bias === 'type' ? 0.7 : state.bias === 'leak' ? 0.44 : 0.56;
 
     if (roll < ghostP) {
         let pool;
         if (phase >= 3) {
-            if (state.wild && chance(0.3)) pool = WILD;
-            else pool = chance(0.6) ? DESTRUCTIVE : SAFE;
+            if (state.wild && chance(0.5)) pool = WILD;
+            else pool = chance(0.85) ? DESTRUCTIVE : SAFE;
         } else {
-            pool = chance(0.18) ? DESTRUCTIVE : SAFE; // mostly harmless at first
+            pool = chance(0.48) ? DESTRUCTIVE : SAFE; // the rot starts early and bites
         }
         const item = pick(pool);
         await ghostCommand(term, state, typeof item === 'function' ? item() : item);
-    } else if (roll < ghostP + 0.16) {
+    } else if (roll < ghostP + 0.14) {
         await burst(term, state);
-    } else if (state.bias === 'ui' && roll < ghostP + 0.4) {
+    } else if (state.bias === 'ui' && roll < ghostP + 0.42) {
         spill(term, state);
         twitch(term, state);
         await sleep(rand(220, 700));
-    } else if (roll < ghostP + 0.56) {
+    } else if (roll < ghostP + 0.54) {
         whisper(term, state);
         await sleep(rand(200, 700));
     } else {
@@ -367,10 +426,17 @@ function setPhase(term, state, phase) {
 
     if (phase === 1) {
         whisper(term, state);   // the first line with no prompt
-        if (chance(0.7)) spill(term, state);
+        spill(term, state);
+        if (chance(0.5)) spill(term, state);
+    }
+    if (phase === 2) {
+        twitch(term, state);
+        if (chance(0.6)) spill(term, state);
     }
     if (phase === 3) {
         flash(term);
+        spill(term, state);
+        if (chance(0.8)) spill(term, state);
         if (chance(0.5)) spill(term, state);
     }
 }
@@ -490,7 +556,7 @@ async function ghostCommand(term, state, text) {
 
     // file surgery is done writing by the time the command returns;
     // don't sit on the full idle timeout before reading the damage back
-    const wound = /^(edit|rm|chmod|mkdir)\b/.test(text)
+    const wound = /^(edit|rm|chmod|mkdir|corrupt)\b/.test(text)
         || /^sql\s+(drop|delete|update|insert)\b/i.test(text);
     await waitIdle(term, wound ? 1600 : 6000);
 
@@ -498,7 +564,13 @@ async function ghostCommand(term, state, text) {
     // server is the one telling the story, `critical` re-reads it later
     if (wound && Date.now() - state.lastRefresh > 1500) {
         state.lastRefresh = Date.now();
-        try { await term.integrityRefresh?.(); } catch { /* noop */ }
+        if (/^corrupt\b/.test(text)) {
+            // corrupt already takes seconds; let the report arrive in the
+            // background instead of holding the next wound hostage
+            void term.integrityRefresh?.();
+        } else {
+            try { await term.integrityRefresh?.(); } catch { /* noop */ }
+        }
     }
 }
 
@@ -551,25 +623,32 @@ function whisper(term, state) {
 /* ---------- the interface itself ---------- */
 function twitch(term, state) {
     const roll = Math.random();
+    const hard = state.phase >= 3 ? 3 : state.phase === 2 ? 1.7 : 1;
 
-    if (roll < 0.3) {
-        term.root.style.transform = `translate(${rand(-6, 6)}px, ${rand(-4, 4)}px) skewX(${((Math.random() - 0.5) * 2).toFixed(2)}deg)`;
-    } else if (roll < 0.5) {
-        term.root.style.filter = `hue-rotate(${rand(-30, 30)}deg) saturate(${(0.7 + Math.random() * 0.7).toFixed(2)}) contrast(${(0.9 + Math.random() * 0.45).toFixed(2)})`;
+    if (roll < 0.32) {
+        term.root.style.transform =
+            `translate(${rand(-8 * hard, 8 * hard)}px, ${rand(-5 * hard, 5 * hard)}px) ` +
+            `skewX(${((Math.random() - 0.5) * (2 + hard)).toFixed(2)}deg) ` +
+            `scale(${(1 + (Math.random() - 0.5) * 0.02 * hard).toFixed(3)})`;
+    } else if (roll < 0.52) {
+        term.root.style.filter =
+            `hue-rotate(${rand(-40 * hard, 40 * hard)}deg) ` +
+            `saturate(${(0.6 + Math.random() * 0.9).toFixed(2)}) ` +
+            `contrast(${(0.85 + Math.random() * 0.6).toFixed(2)})`;
     } else if (roll < 0.6) {
         term.setFontSize(rand(11, 19));
-    } else if (roll < 0.68) {
+    } else if (roll < 0.67) {
         term.setTheme(pick(['phosphor', 'amber', 'ice']));
-    } else if (roll < 0.74) {
+    } else if (roll < 0.73) {
         term.setLocale(pick(['ru', 'en']));
-    } else if (roll < 0.8) {
+    } else if (roll < 0.79) {
         term.promptEl.textContent = pick(['root@localhost:/#', '???@???:~$', 'sentinel@/proc/self$', `${term.session.host}:~$`]);
-    } else if (roll < 0.9) {
+    } else if (roll < 0.88) {
         flash(term);
     } else {
         // a strip of the sentinel bar lies, for a moment
         const el = document.getElementById('sentinel-msg');
-        if (el) el.textContent = pick(['integrity lost', 'watchdog blind', 'nothing is being repaired', 'resync impossible', 'signal 0x0000']);
+        if (el) el.textContent = pick(['integrity lost', 'watchdog blind', 'nothing is being repaired', 'resync impossible', 'signal 0x0000', 'sentinel denied']);
     }
 }
 
@@ -579,24 +658,26 @@ function spill(term, state) {
     el.className = 'spill';
     el.setAttribute('aria-hidden', 'true');
 
-    if (chance(0.12)) {
+    const hard = state.phase >= 3;
+
+    if (chance(hard ? 0.24 : 0.14)) {
         el.classList.add('spill--mark');
         el.textContent = pick(MARKS);
-        el.style.left = `${rand(-6, 42)}%`;
-        el.style.top = `${rand(6, 68)}%`;
-        el.style.transform = `rotate(${rand(-14, 14)}deg)`;
+        el.style.left = `${rand(-10, 46)}%`;
+        el.style.top = `${rand(4, 70)}%`;
+        el.style.transform = `rotate(${rand(-18, 18)}deg)`;
     } else {
-        if (state.damaged > 0 && chance(0.35)) el.classList.add('spill--hot');
+        if (state.damaged > 0 && chance(hard ? 0.65 : 0.4)) el.classList.add('spill--hot');
         el.textContent = pick(SPILLS);
-        el.style.left = `${rand(0, 74)}%`;
-        el.style.top = `${rand(4, 88)}%`;
-        el.style.transform = `rotate(${rand(-4, 4)}deg)`;
-        if (chance(0.4)) el.style.fontSize = `${rand(10, 16)}px`;
-        if (chance(0.3)) el.style.filter = `blur(${(Math.random() * 1.2).toFixed(2)}px)`;
+        el.style.left = `${rand(0, 78)}%`;
+        el.style.top = `${rand(3, 90)}%`;
+        el.style.transform = `rotate(${rand(-6, 6)}deg)`;
+        if (chance(0.5)) el.style.fontSize = `${rand(10, 17)}px`;
+        if (chance(0.4)) el.style.filter = `blur(${(Math.random() * 1.6).toFixed(2)}px)`;
     }
 
     root.appendChild(el);
-    const t = setTimeout(() => { el.remove(); state.timers.delete(t); }, rand(900, 3400));
+    const t = setTimeout(() => { el.remove(); state.timers.delete(t); }, rand(1100, hard ? 5200 : 3600));
     state.timers.add(t);
 }
 

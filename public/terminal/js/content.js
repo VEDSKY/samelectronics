@@ -32,7 +32,7 @@ export const MOTD = [
     ['blank', ''],
     ['label', 'system notice'],
     ['out', '  this shell is running on a live, exposed copy of the site itself.'],
-    ['out', '  type <span class="k">hack</span> to see what is open — and what happens when you break it.'],
+    ['out', '  the project is all here. whether it keeps its shape is another question.'],
     ['blank', ''],
     ['faint', 'press TAB to complete · ↑↓ for history · Ctrl+K for the keyboard'],
 ];
