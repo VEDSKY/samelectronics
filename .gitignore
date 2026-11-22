@@ -18,3 +18,26 @@ yarn-error.log
 /.fleet
 /.idea
 /.vscode
+
+# Local notes / working markdown (never committed).
+# The repository README stays tracked; everything else is local-only.
+*.md
+!README.md
+!public/vendor/**
+docs/local/
+
+# AI agent / assistant tooling files and folders.
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.opencode/
+.claude/
+.cursor/
+.cursorrules
+.windsurf/
+.continue/
+.aider*
+.aiderignore
+.github/copilot-instructions.md
+.mcp.json
+mcp.json
