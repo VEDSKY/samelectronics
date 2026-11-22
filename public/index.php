@@ -2,6 +2,11 @@
 
 use Illuminate\Http\Request;
 
+// PHP 8.4 raises deprecations from older locked vendor packages (Carbon & co).
+// Keep the terminal response clean regardless of the local php.ini.
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_USER_DEPRECATED);
+ini_set('display_errors', '0');
+
 define('LARAVEL_START', microtime(true));
 
 // Determine if the application is in maintenance mode...
