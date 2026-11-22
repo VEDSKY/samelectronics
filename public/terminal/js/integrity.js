@@ -1,18 +1,26 @@
 /* ============================================================
    integrity.js — the shell bleeds when its critical spots break
 
-   Polls /shell/integrity. Any damage to the project's load-bearing
-   files turns into escalating glitches, authentic PHP/Laravel
-   exception traces, and — once the manifest or the whole project is
-   gone — full databending: canvas feedback, RGB tearing, scrambled
-   text, phantom stack traces and a layout that refuses to sit still.
+   Polls /shell/integrity. Damage to the project's load-bearing files
+   is reported first: authentic PHP/Laravel exception traces that the
+   visitor can actually re-read from the server with `critical`.
+
+   Only then does the display start to drift. The glitch ramps in
+   tiers over several seconds, printed text slowly decays, and — once
+   the manifest or the whole project is gone — the page fades into
+   full databending: canvas feedback, RGB tearing, scrambled text,
+   phantom stack traces and a layout that refuses to sit still.
 
    The sentinel restores everything on its next pulse; the shell then
-   snaps back together.
+   unwinds through the tiers instead of snapping back.
    ============================================================ */
-import { esc } from './core.js';
+import { esc, sleep } from './core.js';
 
 const POLL_MS = 3500;
+const RAMP_MS = 1100;
+const CHAOS_DELAY = 3400;   // how long the real error stays readable
+const CHAOS_FADE = 5200;    // how long the databending takes to take hold
+const DECAY_MS = 1700;
 const GLYPHS = '▓▒░█▌▐╳#@%&$*+=~^<>/\\|_';
 
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -29,7 +37,19 @@ export function installIntegrity(term) {
         total: 0,
         catastrophic: false,
         key: '',
+        hint: null,
+
+        tier: 0,
+        targetTier: 0,
+        ramp: null,
+
         chaos: null,
+        pendingChaosAt: 0,
+
+        decay: 0,
+        decayTimer: null,
+        decayOriginals: new Map(),
+
         inited: false,
     };
 
@@ -51,7 +71,7 @@ export function installIntegrity(term) {
     const tick = async () => {
         const data = await fetchIntegrity();
         if (!data || !data.ok) return;
-        apply(term, state, data);
+        await apply(term, state, data);
     };
 
     // let the sentinel's heal trigger an immediate re-check
@@ -61,56 +81,185 @@ export function installIntegrity(term) {
     tick();
 }
 
-function apply(term, state, data) {
+async function apply(term, state, data) {
     state.level = Number(data.level) || 0;
     state.total = Number(data.total) || 0;
     state.catastrophic = Boolean(data.catastrophic);
+    state.hint = data;
 
-    const root = term.root;
+    // report every distinct damage set exactly once, with the real error
+    const key = state.level + '|'
+        + (data.broken || []).map((b) => b.path + ':' + b.state).join(',')
+        + '|' + (data.manifest_broken ? 'M' : '')
+        + (data.db_broken ? 'D' : '');
+
+    if (state.level > 0 && key !== state.key) {
+        state.key = key;
+        await report(term, data, state);
+    }
 
     if (state.level === 0) {
-        if (state.chaos) endChaos(term, state);
-        if (root.dataset.glitch) delete root.dataset.glitch;
-        state.key = '';
+        calm(term, state);
         return;
     }
 
-    // escalate the filter-based glitch
-    const tier = state.catastrophic ? 4 : Math.min(3, 1 + Math.floor(state.level / 3));
-    root.dataset.glitch = String(tier);
+    state.targetTier = state.catastrophic
+        ? 4
+        : Math.min(3, 1 + Math.floor((state.level - 1) / 3));
 
-    if (state.catastrophic && !state.chaos) {
-        beginChaos(term, state, data);
-    }
+    ensureRamp(term, state);
+    if (!state.chaos) startDecay(term, state);
 
-    // announce the damage once per distinct damage set
-    const key = state.level + '|' + (data.broken || []).map((b) => b.path + ':' + b.state).join(',') + '|' + (data.manifest_broken ? 'M' : '') + (data.db_broken ? 'D' : '');
-    if (key !== state.key) {
-        state.key = key;
-        report(term, data, state);
+    if (state.catastrophic) {
+        if (!state.pendingChaosAt && !state.chaos) {
+            state.pendingChaosAt = Date.now() + CHAOS_DELAY + rand(0, 900);
+        }
+    } else {
+        state.pendingChaosAt = 0;
     }
 }
 
-function report(term, data, state) {
+/* ---------- the error, before the show ---------- */
+async function report(term, data, state) {
     term.blank();
     term.write(
         `<span class="line--err">!! INTEGRITY FAILURE</span> ` +
         `<span class="line--dim">${data.level}/${data.total} critical spots compromised` +
         `${state.catastrophic ? ' · CATASTROPHIC' : ''}</span>`
     );
+    await sleep(140);
 
-    (data.errors || []).slice(0, 4).forEach((e) => {
+    const errors = (data.errors || []).slice(0, 4);
+    for (const e of errors) {
         term.write(`<span class="line--err">${esc(e.class)}</span> <span class="line--dim">at ${esc(e.file)}:${esc(String(e.line))}</span>`);
         term.write(`  ${esc(e.message)}`, 'line--err');
         (e.trace || []).slice(0, 3).forEach((l) => term.write(`  ${esc(l)}`, 'line--dim'));
-    });
-
-    if (state.catastrophic) {
-        term.dim('the shell can no longer guarantee its own output — holding until the sentinel pulse');
-    } else {
-        term.dim('run `sentinel`? no. run `reset` to heal now, or wait for the pulse.');
+        await sleep(120);
     }
+
+    term.dim(state.catastrophic
+        ? 'the failure is real · run `critical` to read it again from the server · sync is going'
+        : 'the failure is real · run `critical` to read it again from the server · sync is drifting');
     term.blank();
+}
+
+/* ---------- the tier ramp ---------- */
+function ensureRamp(term, state) {
+    if (state.ramp) return;
+
+    state.ramp = setInterval(() => {
+        if (state.level === 0 && state.tier <= 0) {
+            clearInterval(state.ramp);
+            state.ramp = null;
+            if (!term.possession) {
+                delete term.root.dataset.glitch;
+                delete term.root.dataset.degrade;
+            }
+            return;
+        }
+
+        if (state.tier < state.targetTier) state.tier++;
+        else if (state.tier > state.targetTier) state.tier = Math.max(0, state.tier - 1);
+
+        applyTier(term, state);
+
+        if (state.pendingChaosAt && state.catastrophic && !state.chaos
+            && Date.now() >= state.pendingChaosAt) {
+            state.pendingChaosAt = 0;
+            state.tier = 4;
+            applyTier(term, state);
+            beginChaos(term, state, state.hint || {});
+        }
+    }, RAMP_MS);
+}
+
+function applyTier(term, state) {
+    // while `glitch` owns the display, it handles its own tiers
+    if (term.possession) return;
+
+    const root = term.root;
+    if (state.tier <= 0) {
+        if (root.dataset.glitch) delete root.dataset.glitch;
+        if (root.dataset.degrade) delete root.dataset.degrade;
+        return;
+    }
+    root.dataset.glitch = String(Math.min(3, state.tier));
+    // focus follows the same ramp, a step behind the tearing
+    root.dataset.degrade = String(Math.min(4, state.tier + 1));
+}
+
+/* ---------- slow text decay ---------- */
+function startDecay(term, state) {
+    if (state.decayTimer || state.chaos) return;
+
+    state.decay = Math.min(0.12, state.decay + 0.04);
+    corrupt(term, state);
+
+    state.decayTimer = setInterval(() => {
+        if (state.level === 0) return;
+        state.decay = Math.min(0.8, state.decay + 0.045);
+        corrupt(term, state);
+    }, DECAY_MS);
+}
+
+function corrupt(term, state) {
+    const scope = term.linesEl || term.root.querySelector('#lines');
+    if (!scope) return;
+
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+        if (n.nodeValue && n.nodeValue.trim().length > 4) nodes.push(n);
+    }
+    if (!nodes.length) return;
+
+    const count = Math.max(1, Math.round(state.decay * 4));
+    for (let i = 0; i < count; i++) {
+        const node = nodes[rand(0, nodes.length - 1)];
+        if (!node.nodeValue) continue;
+        if (!state.decayOriginals.has(node)) state.decayOriginals.set(node, node.nodeValue);
+        const s = node.nodeValue;
+        const at = rand(0, Math.max(0, s.length - 1));
+        const len = 1 + rand(0, 2);
+        node.nodeValue = s.slice(0, at) + glyphs(len) + s.slice(at + len);
+    }
+}
+
+function freezeDecay(state) {
+    if (state.decayTimer) {
+        clearInterval(state.decayTimer);
+        state.decayTimer = null;
+    }
+}
+
+function stopDecay(term, state) {
+    freezeDecay(state);
+    state.decay = 0;
+    for (const [node, value] of state.decayOriginals) {
+        try { node.nodeValue = value; } catch { /* detached */ }
+    }
+    state.decayOriginals.clear();
+}
+
+/* ---------- calm ---------- */
+function calm(term, state) {
+    state.key = '';
+    state.targetTier = 0;
+    state.pendingChaosAt = 0;
+
+    if (state.chaos) {
+        endChaos(term, state);
+        state.tier = 3; // unwind through the tiers instead of snapping clear
+    }
+
+    stopDecay(term, state);
+    ensureRamp(term, state);
+
+    if (!term.possession && state.tier <= 0 && !state.ramp) {
+        delete term.root.dataset.glitch;
+        delete term.root.dataset.degrade;
+    }
 }
 
 /* ============================================================
@@ -119,7 +268,9 @@ function report(term, data, state) {
 
 function beginChaos(term, state, data) {
     const root = term.root;
-    if (!root) return;
+    if (!root || state.chaos) return;
+
+    freezeDecay(state); // the scramble takes over from here
 
     root.classList.add('is-databending');
     ensureSvgFilter();
@@ -127,11 +278,14 @@ function beginChaos(term, state, data) {
     const canvas = document.createElement('canvas');
     canvas.className = 'databend-canvas';
     canvas.setAttribute('aria-hidden', 'true');
+    canvas.style.opacity = '0.05';
     root.appendChild(canvas);
     const ctx = canvas.getContext('2d', { alpha: true });
 
     const noise = makeNoise();
     const errors = (data.errors || []).slice(0, 6);
+    const startedAt = performance.now();
+    const growth = () => Math.min(1, (performance.now() - startedAt) / CHAOS_FADE);
 
     const resize = () => {
         canvas.width = Math.max(1, root.clientWidth);
@@ -149,33 +303,39 @@ function beginChaos(term, state, data) {
             return;
         }
 
+        const t = growth();
+        canvas.style.opacity = (0.1 + 0.8 * t).toFixed(3);
+
         // feedback: smear the previous frame sideways
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 0.22;
+        ctx.globalAlpha = 0.06 + 0.16 * t;
         ctx.drawImage(canvas, rand(-9, 9), rand(-5, 5));
         ctx.globalAlpha = 1;
 
         // signal noise, added with screen blending
         ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = 0.10 + Math.random() * 0.12;
-        for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha = 0.04 + 0.1 * t;
+        const puffs = 1 + Math.round(2 * t);
+        for (let i = 0; i < puffs; i++) {
             ctx.drawImage(noise, rand(-noise.width, w), rand(-noise.height, h));
         }
         ctx.globalAlpha = 1;
 
         // torn scanlines: copy bands to random offsets
         ctx.globalCompositeOperation = 'source-over';
-        for (let i = 0; i < 11; i++) {
+        const bands = Math.round(2 + 9 * t);
+        for (let i = 0; i < bands; i++) {
             const sh = rand(2, 34);
             const sy = rand(0, Math.max(1, h - sh));
             const dy = rand(0, Math.max(1, h - sh));
-            const dx = rand(-90, 90);
+            const dx = rand(-1, 1) * Math.round(20 + 70 * t);
             ctx.drawImage(canvas, 0, sy, w, sh, dx, dy, w, sh);
         }
 
         // channel-split bands
-        for (let i = 0; i < 5; i++) {
-            ctx.fillStyle = `rgba(${rand(0, 255)}, ${rand(0, 255)}, ${rand(0, 255)}, 0.16)`;
+        const splits = Math.round(1 + 4 * t);
+        for (let i = 0; i < splits; i++) {
+            ctx.fillStyle = `rgba(${rand(0, 255)}, ${rand(0, 255)}, ${rand(0, 255)}, ${(0.06 + 0.12 * t).toFixed(3)})`;
             ctx.fillRect(0, rand(0, h), w, rand(1, 12));
         }
 
@@ -183,9 +343,12 @@ function beginChaos(term, state, data) {
     };
     raf = requestAnimationFrame(frame);
 
-    // scramble whatever text is on screen
+    // scramble whatever text is on screen — sparse at first
     const originals = new Map();
     const scramble = () => {
+        const t = growth();
+        if (Math.random() > 0.2 + 0.8 * t) return;
+
         const scope = root.querySelector('#lines') || root;
         const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
         const nodes = [];
@@ -193,7 +356,9 @@ function beginChaos(term, state, data) {
         while ((n = walker.nextNode())) {
             if (n.nodeValue && n.nodeValue.trim()) nodes.push(n);
         }
-        for (let i = 0; i < 12 && nodes.length; i++) {
+
+        const count = Math.max(1, Math.round(1 + 11 * t));
+        for (let i = 0; i < count && nodes.length; i++) {
             const node = nodes[rand(0, nodes.length - 1)];
             if (!node.nodeValue) continue;
             if (!originals.has(node)) originals.set(node, node.nodeValue);
@@ -203,29 +368,35 @@ function beginChaos(term, state, data) {
             node.nodeValue = s.slice(0, at) + glyphs(len) + s.slice(at + len);
         }
     };
-    const scrambleTimer = setInterval(scramble, 110);
+    const scrambleTimer = setInterval(scramble, 120);
 
-    // the page refuses to sit still
+    // the page refuses to sit still — amplitude grows as it takes hold
     const jitterTimer = setInterval(() => {
-        const dx = rand(-8, 8);
-        const dy = rand(-5, 5);
-        const scale = (1 + (Math.random() - 0.5) * 0.035).toFixed(3);
-        const skew = ((Math.random() - 0.5) * 1.8).toFixed(2);
-        root.style.transform = `translate(${dx}px, ${dy}px) scale(${scale}) skewX(${skew}deg)`;
-        root.style.filter = `url(#db-filter) contrast(${rand(90, 190)}%) hue-rotate(${rand(-45, 45)}deg) saturate(${rand(80, 230)}%)`;
+        const t = growth();
+        const amp = 0.2 + 0.8 * t;
+        const dx = rand(-8, 8) * amp;
+        const dy = rand(-5, 5) * amp;
+        const scale = 1 + (Math.random() - 0.5) * 0.035 * amp;
+        const skew = (Math.random() - 0.5) * 1.8 * amp;
+        root.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${scale.toFixed(3)}) skewX(${skew.toFixed(2)}deg)`;
+        root.style.filter = `url(#db-filter) contrast(${Math.round(100 + 40 * t)}%) hue-rotate(${Math.round(rand(-45, 45) * t)}deg) saturate(${Math.round(100 + 60 * t)}%)`;
 
-        if (Math.random() < 0.2) flash(root);
-    }, 130);
+        if (Math.random() < 0.05 + 0.2 * t) flash(root);
+    }, 150);
 
-    // phantom stack traces drifting over the shell
+    // phantom stack traces drift in once the signal is really gone
     const panelTimer = setInterval(() => {
+        const t = growth();
+        if (t < 0.12) return;
+        if (Math.random() > 0.2 + 0.8 * t) return;
         if (root.querySelectorAll('.phantom-error').length > 7) return;
         spawnPanel(root, errors);
-    }, 520);
+    }, 620);
 
     // occasionally the input loses what you typed
     const inputTimer = setInterval(() => {
-        if (term.mode !== 'ask' && Math.random() < 0.18 && (term.value || '').length > 3) {
+        const t = growth();
+        if (term.mode !== 'ask' && Math.random() < 0.04 + 0.18 * t && (term.value || '').length > 3) {
             term.clearLine();
         }
     }, 240);
@@ -260,7 +431,7 @@ function endChaos(term, state) {
     chaos.root.classList.remove('is-databending');
     chaos.root.style.transform = '';
     chaos.root.style.filter = '';
-    if (chaos.root.dataset.glitch) delete chaos.root.dataset.glitch;
+    if (!term.possession) delete chaos.root.dataset.degrade;
 
     const overlay = document.getElementById('recovery');
     if (overlay) {
@@ -326,6 +497,7 @@ function ensureSvgFilter() {
 function flash(root) {
     const el = document.createElement('div');
     el.className = 'chaos-flash';
+    el.setAttribute('aria-hidden', 'true');
     root.appendChild(el);
     setTimeout(() => el.remove(), 140);
 }

@@ -645,6 +645,41 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ============================================================
+   degrade — the tube slowly loses focus before the glitch lands
+   ============================================================ */
+.crt[data-degrade="1"] { --degrade: 1; }
+.crt[data-degrade="2"] { --degrade: 2; }
+.crt[data-degrade="3"] { --degrade: 3; }
+.crt[data-degrade="4"] { --degrade: 4; }
+
+.crt[data-degrade] .line,
+.crt[data-degrade] .cmdline__text,
+.crt[data-degrade] .statusbar {
+    letter-spacing: calc(var(--degrade) * 0.035em);
+    text-shadow:
+        calc(var(--degrade) * 0.45px) 0 rgba(255, 0, 90, 0.14),
+        calc(var(--degrade) * -0.45px) 0 rgba(0, 255, 255, 0.12);
+}
+.crt[data-degrade="3"] .line,
+.crt[data-degrade="4"] .line {
+    animation: degrade-wobble 3.4s steps(6) infinite;
+}
+.crt[data-degrade="4"] .line,
+.crt[data-degrade="4"] .cmdline__text {
+    text-shadow:
+        2px 0 rgba(255, 0, 90, 0.34),
+        -2px 0 rgba(0, 255, 255, 0.3),
+        0 0 8px currentColor;
+}
+
+@keyframes degrade-wobble {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(0.4px); }
+    50% { transform: translateX(-0.5px); }
+    75% { transform: translateX(0.2px); }
+}
+
+/* ============================================================
    databending — the manifest or the whole project is gone
    The page stops behaving like a page. No filter can save it.
    ============================================================ */
